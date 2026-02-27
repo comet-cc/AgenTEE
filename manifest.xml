@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <remote name="comet" fetch="https://github.com/comet-cc/" />
+  <remote name="opencca" fetch="https://github.com/opencca/" />
+  <remote name="github" fetch="ssh://git@github.com/"/>
+ 
+  <default remote="comet" revision="main" />
+  <project name="AgenTEE" path="AgenTEE" revision="main" /> 
+  <project name="cca_agents" path="cca_agents" revision="496b1eee2b38d750896d71f31076b801f3d818ba" /> 
+  <project name="RMM-CAEC" path="tf-rmm" revision="CAEC" />
+  <project name="debos-fs" path="debos-fs" revision="43820354add2a186c27317c4c6d58d50ad54f27f" />
+  <project name="External-Modules-CAEC" path="External_modules" revision="CAEC" />
+  <project name="kvmtool-cca-CAEC" path="kvmtool" revision="CAEC" />
+  <project name="CAEC" path="CAEC" revision="main" /> 
+  <project name="linux" remote="opencca" path="linux" revision="opencca/rk3588-v5+v7" />
+  <project name="linux" remote="opencca" path="linux-guest" revision="opencca/rk3588-v5+v7" />
+
+  <project name="SinaAb7/opencca-build" remote="github" path="opencca-build" revision="91150c3f72806a3e7a953fa647d1fea422f2507b" />
+  <project name="SinaAb7/opencca-flash" remote="github" path="opencca-flash" 
+  revision="50bb2daa7c336b34c3eae0fdb188680062920702" />
+  <project name="ggml-org/llama.cpp" remote="github" path="llamacpp" revision="e02b597be3702174e7b47b44cd03e1da1553284b" />
+  <project name="debian-image-recipes" remote="opencca" path="debian-image-recipes" 
+  revision="06cf2e55d7b7aaad8da107abcbcf5463dd7b0474" />
+  <project name="arm-trusted-firmware" remote="opencca" path="trusted-firmware-a" revision="opencca/systex25" />
+  <project name="u-boot" path="u-boot" remote="opencca" revision="opencca/systex25" />
+  <project name="rkbin" path="rkbin" remote="opencca" revision="b0c100f1a260d807df450019774993c761beb79d" />
+  <project name="opencca/opencca-assets" path="opencca-assets" remote="github" 
+  revision="f75c95d15e485d8f147ff8fd4cc2f2513ed60131" />
+  
+
+</manifest>

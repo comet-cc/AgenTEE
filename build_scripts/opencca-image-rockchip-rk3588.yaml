@@ -1,0 +1,156 @@
+{{ $architecture := or .architecture "arm64" }}
+{{ $suite := or .suite "trixie" }}
+{{ $ospack := or .ospack (printf "ospack-debian-%s-%s" $architecture $suite) }}
+{{ $imagesize := or .imagesize "8GB" }}
+{{ $platform := or .platform "unknown" }}
+{{ $cmdline := or .cmdline "console=ttyS2,1500000 earlycon rootwait maxcpus=2"}}
+{{ $image := or .image (printf "opencca-image-rockchip-%s" $platform) }}
+
+architecture: {{ $architecture }}
+
+actions:
+  - action: unpack
+    description: Unpack ospack
+    file: {{ $ospack }}.tar.gz
+
+  - action: image-partition
+    imagename: {{ $image }}.img
+    imagesize: {{ $imagesize }}
+    partitiontype: gpt
+    mountpoints:
+      - mountpoint: /
+        partition: root
+        options: [ x-systemd.growfs ]
+    partitions:
+      - name: loader1
+        fs: none
+        start: 64s
+        end: 7168s
+      - name: loader2
+        fs: none
+        start: 16384s
+        end: 24575s
+      - name: root
+        fs: ext4
+        start: 32768s  # 16M
+        end: 100%
+        flags: [ boot ]
+
+  - action: filesystem-deploy
+    setup-fstab: true
+    setup-kernel-cmdline: true
+    append-kernel-cmdline: {{ $cmdline }}
+
+  - action: overlay
+    description: Overlay u-boot configuration
+    source: overlays/opencca/u-boot
+    destination: /
+
+  - action: run
+    description: Set hostname to opencca-{{ $platform }}
+    command: echo "opencca-{{ $platform }}" > ${ROOTDIR}/etc/hostname
+
+  - action: overlay
+    description: "Configure systemd-repart to grow / at first boot"
+    source: overlays/grow-rootfs
+
+  - action: run
+    command: mkdir -p ${ROOTDIR}/opt/linux
+
+  - action: overlay
+    description: Copy Linux kernel
+    source: prebuilt/linux
+    destination: /opt/linux
+
+  - action: run
+    description: List kernel
+    command: find ${ROOTDIR}/opt/linux/
+
+  - action: run
+    description: Install kernel
+    chroot: true
+    command: apt-get install ./opt/linux/*.deb
+
+  - action: overlay
+    description: Overlay opencca bin
+    source: overlays/opencca/bin/
+    destination: /usr/bin/
+
+  - action: overlay
+    description: Overlay opencca hello scripts
+    source: overlays/opencca/hello_scripts/
+    destination: /home/user/
+
+  - action: overlay
+    description: Overlay /etc/systemd
+    source: overlays/opencca/tty/etc/systemd/system/serial-getty@ttyS2.service.d/
+    destination: /etc/systemd/system/serial-getty@ttyS2.service.d/
+
+  - action: overlay
+    description: Overlay CAEC scripts
+    source: overlays/CAEC/
+    destination: /home/user/
+
+  - action: overlay
+    description: Overlay agenTEE scripts
+    source: overlays/agenTEE/
+    destination: /home/user/
+
+  - action: run
+    description: Run agenTEE script
+    chroot: true
+    command: /home/user/script.sh
+
+  - action: apt
+    description: install opencca packages
+    packages:
+      - sshfs
+      - emacs-nox
+      - screen
+      - figlet
+
+  - action: run
+    description: Fix permissions in user directory
+    chroot: true
+    command: chown -R user:user /home/user
+
+  - action: run
+    description: Figlet welcome
+    chroot: true
+    command: echo "figlet 'OpenCCA'" >> /home/user/.bashrc
+
+  - action: run
+    description: Check extlinux contents
+    command: cat ${ROOTDIR}/boot/extlinux/extlinux.conf
+
+  - action: raw
+    description: Flash idbloader.img to loader1
+    origin: recipe
+    source: prebuilt/u-boot-{{ $platform }}/idbloader.img
+    partition: loader1
+    offset: 0
+
+  - action: raw
+    description: Flash u-boot.itb to loader2
+    origin: recipe
+    source: prebuilt/u-boot-{{ $platform }}/u-boot.itb
+    partition: loader2
+    offset: 0
+
+  - action: run
+    description: Copy USB loader binary to output directory
+    chroot: false
+    postprocess: true
+    command: cp $RECIPEDIR/prebuilt/u-boot-{{ $platform }}/rk3588_spl_loader_*.bin $ARTIFACTDIR/
+
+  - action: run
+    description: Create block map for {{ $image }}.img
+    chroot: false
+    postprocess: true
+    command: bmaptool create $ARTIFACTDIR/{{ $image }}.img > $ARTIFACTDIR/{{ $image }}.bmap
+
+  - action: run
+    description: Compress {{ $image }}.img
+    postprocess: true
+    command: pigz -f $ARTIFACTDIR/{{ $image }}.img
+

@@ -1,0 +1,3 @@
+Explain Arm Confidential Compute Architecture (CCA) in 10 bullet points. Each bullet must be 1–2 sentences and include one concrete technical term (e.g., realm, RMM, attestation).
+Summarize the main security risks of LLM agents as a structured list with these headings: Model-level, Tool-level, System-level. Provide at least 4 items per heading and 1 mitigation per item.
+Describe prompt injection with a short example attack prompt and a short example defense prompt. Then explain why the defense is not fully reliable in 6–8 sentences.
