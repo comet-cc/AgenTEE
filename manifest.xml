@@ -7,10 +7,10 @@
   <default remote="comet" revision="main" />
   <project name="AgenTEE" path="AgenTEE" revision="main" /> 
   <project name="cca_agents" path="cca_agents" revision="496b1eee2b38d750896d71f31076b801f3d818ba" /> 
-  <project name="RMM-CAEC" path="tf-rmm" revision="CAEC" />
+  <project name="RMM-CAEC" path="tf-rmm" revision="cf0be957e6367f6da4ca28bdf86bd7c7d84ff97f" />
   <project name="debos-fs" path="debos-fs" revision="43820354add2a186c27317c4c6d58d50ad54f27f" />
-  <project name="External-Modules-CAEC" path="External_modules" revision="CAEC" />
-  <project name="kvmtool-cca-CAEC" path="kvmtool" revision="CAEC" />
+  <project name="External-Modules-CAEC" path="External_modules" revision="c199064667e30fea460612622afcc535bc2f5cfd" />
+  <project name="kvmtool-cca-CAEC" path="kvmtool" revision="6d41b06fae0752e09f37dca248b6dafbe142311e" />
   <project name="CAEC" path="CAEC" revision="main" /> 
   <project name="linux" remote="opencca" path="linux" revision="opencca/rk3588-v5+v7" />
   <project name="linux" remote="opencca" path="linux-guest" revision="opencca/rk3588-v5+v7" />
