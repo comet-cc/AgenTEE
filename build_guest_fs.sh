@@ -7,10 +7,11 @@ rsync -av --delete $DIR/External_modules/user-space/out/* $OVERLAY/.
 rsync -av --delete $DIR/manifest/overlays/guestfs/* $OVERLAY/.
 rsync -av --delete $DIR/SecGPT $OVERLAY/.
 #rsync -av --delete /home/netsys1/Multi-Realm-LLM-source/Multi-Realm-LLM/suplementary-binaries/out/* $OVERLAY/.
+cp $DIR/manifest/agenttee-requirements-install.sh $DIR/debos-fs/
 
 cd $DIR/debos-fs
-sudo ./build.sh --imgsize 4000MB --format ext4 \
-  --custom-script ./secgpt-arm64-install.sh \
+sudo ./build.sh --imgsize 2000MB --format ext4 \
+  --custom-script ./agenttee-arm64-install.sh \
   --py-enable 0 --imgname VM-fs.img
 
 sudo cp $DIR/debos-fs/out/VM-fs.img $DIR/debos-fs/out/VM-fs2.img

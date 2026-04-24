@@ -1,0 +1,45 @@
+From fe852b43c2d82edab1d453d07b39775869b85b69 Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Fri, 24 Apr 2026 18:12:12 +0100
+Subject: [PATCH] add agenTEE overlay
+
+---
+ buildfs.sh                         |  3 +--
+ opencca-image-rockchip-rk3588.yaml | 10 ++++++++++
+ 2 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/buildfs.sh b/buildfs.sh
+index 10e8da7..84b9851 100755
+--- a/buildfs.sh
++++ b/buildfs.sh
+@@ -4,5 +4,4 @@ DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+ set -x
+ cd $DIR
+ sudo debos --artifactdir=out -t architecture:arm64 ospack-debian.yaml
+-sudo debos --artifactdir=out -t architecture:arm64 -t platform:rock5b-rk3588 opencca-image-rockchip-rk3588.yaml
+-
++sudo debos --artifactdir=out -t architecture:arm64 -t platform:rock5b-rk3588 opencca-image-rockchip-rk3588.yaml --memory 8Gb
+diff --git a/opencca-image-rockchip-rk3588.yaml b/opencca-image-rockchip-rk3588.yaml
+index a1bd900..2602753 100644
+--- a/opencca-image-rockchip-rk3588.yaml
++++ b/opencca-image-rockchip-rk3588.yaml
+@@ -91,6 +91,16 @@ actions:
+     source: overlays/CAEC/
+     destination: /home/user/
+ 
++  - action: overlay
++    description: Overlay agenTEE scripts
++    source: overlays/agenTEE/
++    destination: /home/user/
++
++  - action: run
++    description: Run agenTEE script
++    chroot: true
++    command: /home/user/script.sh
++
+   - action: apt
+     description: install opencca packages
+     packages:
+-- 
+2.34.1
+

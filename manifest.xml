@@ -6,7 +6,6 @@
  
   <default remote="comet" revision="main" />
   <project name="AgenTEE" path="manifest" revision="main" /> 
-  <project name="cca_agents" path="cca_agents" revision="496b1eee2b38d750896d71f31076b801f3d818ba" /> 
   <project name="RMM-CAEC" path="tf-rmm" revision="cf0be957e6367f6da4ca28bdf86bd7c7d84ff97f" />
   <project name="debos-fs" path="debos-fs" revision="43820354add2a186c27317c4c6d58d50ad54f27f" />
   <project name="External-Modules-CAEC" path="External_modules" revision="c199064667e30fea460612622afcc535bc2f5cfd" />
