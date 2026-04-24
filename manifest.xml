@@ -11,7 +11,6 @@
   <project name="debos-fs" path="debos-fs" revision="43820354add2a186c27317c4c6d58d50ad54f27f" />
   <project name="External-Modules-CAEC" path="External_modules" revision="c199064667e30fea460612622afcc535bc2f5cfd" />
   <project name="kvmtool-cca-CAEC" path="kvmtool" revision="6d41b06fae0752e09f37dca248b6dafbe142311e" />
-  <project name="CAEC" path="CAEC" revision="main" /> 
   <project name="linux" remote="opencca" path="linux" revision="opencca/rk3588-v5+v7" />
   <project name="linux" remote="opencca" path="linux-guest" revision="opencca/rk3588-v5+v7" />
 
