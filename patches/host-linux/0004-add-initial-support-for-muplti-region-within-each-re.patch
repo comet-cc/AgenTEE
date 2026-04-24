@@ -1,0 +1,81 @@
+From babd30e58bcb6a09622957298e275d143f2a5175 Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Sun, 19 Oct 2025 10:00:12 +0100
+Subject: [PATCH] add initial support for muplti-region within each realm
+
+---
+ arch/arm64/include/asm/apt.h | 11 ++++++++---
+ arch/arm64/kvm/rme.c         | 21 +++++++++++++--------
+ 2 files changed, 21 insertions(+), 11 deletions(-)
+
+diff --git a/arch/arm64/include/asm/apt.h b/arch/arm64/include/asm/apt.h
+index 0708b387c561..3e7f969e0557 100644
+--- a/arch/arm64/include/asm/apt.h
++++ b/arch/arm64/include/asm/apt.h
+@@ -1,8 +1,12 @@
++
++#define MAX_MEM_REGIONS 20
++
+ struct master_mem {
+     uint8_t slave_ID;
+ 	unsigned long slave_rd_pa;
+     unsigned long ipa_start;
+ 	unsigned long map_size;
++	uint8_t flags;
+ 	bool enable;
+ };
+ 
+@@ -11,6 +15,7 @@ struct slave_mem {
+ 	unsigned long master_rd_pa;
+     unsigned long ipa_start;
+ 	unsigned long map_size;
++	uint8_t flags;
+ 	bool enable;
+ };
+ 
+@@ -19,6 +24,6 @@ struct slave_mem {
+ struct apt_params {
+ 	unsigned long csdata_ipa_begin;
+ 	unsigned long csdata_ipa_end;
+-	struct master_mem master_memory;
+-	struct slave_mem slave_memory;
+-};
++	struct master_mem master_memory[MAX_MEM_REGIONS];
++    struct slave_mem slave_memory[MAX_MEM_REGIONS];
++};
+\ No newline at end of file
+diff --git a/arch/arm64/kvm/rme.c b/arch/arm64/kvm/rme.c
+index 2f7297676877..1ccdef1df879 100644
+--- a/arch/arm64/kvm/rme.c
++++ b/arch/arm64/kvm/rme.c
+@@ -460,14 +460,19 @@ static int realm_create_apt(struct kvm *kvm, struct apt_params *apt_params_value
+ 	//value to apt
+ 	apt_params->csdata_ipa_begin = apt_params_value->csdata_ipa_begin;
+ 	apt_params->csdata_ipa_end = apt_params_value->csdata_ipa_end;
+-
+-	apt_params->master_memory.ipa_start = apt_params_value->master_memory.ipa_start;
+-	apt_params->master_memory.map_size = apt_params_value->master_memory.map_size;
+-	apt_params->master_memory.enable = apt_params_value->master_memory.enable;
+-
+-	apt_params->slave_memory.ipa_start = apt_params_value->slave_memory.ipa_start;
+-	apt_params->slave_memory.map_size = apt_params_value->slave_memory.map_size;
+-	apt_params->slave_memory.enable = apt_params_value->slave_memory.enable;
++	
++	for (int i = 0; i < MAX_MEM_REGIONS; i++) {	
++	apt_params->master_memory[i].ipa_start = apt_params_value->master_memory[i].ipa_start;
++	apt_params->master_memory[i].map_size = apt_params_value->master_memory[i].map_size;
++	apt_params->master_memory[i].enable = apt_params_value->master_memory[i].enable;
++	apt_params->master_memory[i].flags = 0;
++	i
++
++	apt_params->slave_memory[i].ipa_start = apt_params_value->slave_memory[i].ipa_start;
++	apt_params->slave_memory[i].map_size = apt_params_value->slave_memory[i].map_size;
++	apt_params->slave_memory[i].enable = apt_params_value->slave_memory[i].enable;
++	apt_params->slave_memory[i].flags = 0;	
++}
+ 
+ 	apt_param_phys = virt_to_phys(apt_params);
+ 	if (rmi_apt_create(rd_phys, apt_phys, apt_param_phys)) {
+-- 
+2.34.1
+

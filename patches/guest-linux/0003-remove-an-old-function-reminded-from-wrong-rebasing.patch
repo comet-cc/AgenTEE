@@ -1,0 +1,66 @@
+From ec8bed46abb6e756f2cd9722cc63ec5e6130888d Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Sat, 24 Jan 2026 14:46:34 +0000
+Subject: [PATCH] remove an old function reminded from wrong rebasing
+
+---
+ arch/arm64/kvm/rme.c | 43 -------------------------------------------
+ 1 file changed, 43 deletions(-)
+
+diff --git a/arch/arm64/kvm/rme.c b/arch/arm64/kvm/rme.c
+index 64401b2c5b4f..d8e0a447e0cc 100644
+--- a/arch/arm64/kvm/rme.c
++++ b/arch/arm64/kvm/rme.c
+@@ -437,49 +437,6 @@ static int realm_create_rd(struct kvm *kvm)
+ 	return r;
+ }
+ 
+-static int realm_create_apt(struct kvm *kvm, struct apt_params *apt_params_value)
+-{
+-	int r;
+-	void *apt = NULL;
+-	phys_addr_t apt_phys, rd_phys, apt_param_phys;
+-	struct realm *realm = &kvm->arch.realm;
+-	struct apt_params *apt_params = (struct apt_params *)get_zeroed_page(GFP_KERNEL);
+-	apt = (void *)__get_free_page(GFP_KERNEL);
+-	if (!apt)
+-		return -ENOMEM;
+-
+-	apt_phys = virt_to_phys(apt);
+-	realm->apt = apt;
+-	if (rmi_granule_delegate(apt_phys)) {
+-		r = -ENXIO;
+-		goto out;
+-	}
+-	rd_phys = virt_to_phys(realm->rd);
+-
+-
+-	//value to apt
+-	apt_params->csdata_ipa_begin = apt_params_value->csdata_ipa_begin;
+-	apt_params->csdata_ipa_end = apt_params_value->csdata_ipa_end;
+-
+-	apt_params->master_memory.ipa_start = apt_params_value->master_memory.ipa_start;
+-	apt_params->master_memory.map_size = apt_params_value->master_memory.map_size;
+-	apt_params->master_memory.enable = apt_params_value->master_memory.enable;
+-
+-	apt_params->slave_memory.ipa_start = apt_params_value->slave_memory.ipa_start;
+-	apt_params->slave_memory.map_size = apt_params_value->slave_memory.map_size;
+-	apt_params->slave_memory.enable = apt_params_value->slave_memory.enable;
+-
+-	apt_param_phys = virt_to_phys(apt_params);
+-	if (rmi_apt_create(rd_phys, apt_phys, apt_param_phys)) {
+-		r = -ENXIO;
+-		goto out;
+-	}
+-	return 0;
+-out:
+-	free_page((unsigned long)apt);
+-	return r;
+-}
+-
+ static int realm_rtt_destroy(struct realm *realm, unsigned long addr,
+ 			     int level, phys_addr_t *rtt_granule,
+ 			     unsigned long *next_addr)
+-- 
+2.34.1
+

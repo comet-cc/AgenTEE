@@ -1,0 +1,279 @@
+From e5172fab079ec7f030f7fe899d97b1d2a2343d45 Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Sun, 3 Aug 2025 14:01:29 +0100
+Subject: [PATCH 2/2] Add support for predistribution of RTT
+
+---
+ arch/arm64/include/asm/kvm_rme.h  |   1 +
+ arch/arm64/include/asm/rmi_cmds.h |   5 +-
+ arch/arm64/include/asm/rsi_cmds.h |  10 +++
+ arch/arm64/include/uapi/asm/kvm.h |   9 ++
+ arch/arm64/kvm/rme.c              | 131 +++++++++++++++++++++++-------
+ 5 files changed, 123 insertions(+), 33 deletions(-)
+
+diff --git a/arch/arm64/include/asm/kvm_rme.h b/arch/arm64/include/asm/kvm_rme.h
+index fec9cbce0e07..3e5ab0885646 100644
+--- a/arch/arm64/include/asm/kvm_rme.h
++++ b/arch/arm64/include/asm/kvm_rme.h
+@@ -153,4 +153,5 @@ static inline bool realm_is_addr_protected(struct realm *realm,
+ 	return !(addr & ~(BIT(ia_bits - 1) - 1));
+ }
+ 
++int kvm_realm_prealloc_rtt_range(struct kvm *kvm, u64 ipa, u64 size, u32 target_level);
+ #endif
+diff --git a/arch/arm64/include/asm/rmi_cmds.h b/arch/arm64/include/asm/rmi_cmds.h
+index e15ac9b97dc4..08a8b8192cf0 100644
+--- a/arch/arm64/include/asm/rmi_cmds.h
++++ b/arch/arm64/include/asm/rmi_cmds.h
+@@ -507,12 +507,11 @@ static inline int rmi_rtt_unmap_unprotected(unsigned long rd,
+ 	return res.a0;
+ }
+ 
+-static inline int rmi_apt_create(unsigned long rd, unsigned long apt,
+-                                 unsigned long params_ptr)
++static inline int rmi_apt_create(unsigned long rd, unsigned long apt)
+ {
+         struct arm_smccc_res res;
+ 
+-        arm_smccc_1_1_invoke(SMC_RMI_APT_CREATE, rd, apt, params_ptr, &res);
++        arm_smccc_1_1_invoke(SMC_RMI_APT_CREATE, rd, apt, &res);
+ 
+         return res.a0;
+ }
+diff --git a/arch/arm64/include/asm/rsi_cmds.h b/arch/arm64/include/asm/rsi_cmds.h
+index e6a211001bd3..e96c9a52f53b 100644
+--- a/arch/arm64/include/asm/rsi_cmds.h
++++ b/arch/arm64/include/asm/rsi_cmds.h
+@@ -20,6 +20,16 @@ enum ripas {
+ 	RSI_RIPAS_DEV = 3,
+ };
+ 
++static inline void invoke_rsi_fn_smc_with_res(unsigned long function_id,
++                                              unsigned long arg0,
++                                              unsigned long arg1,
++                                              unsigned long arg2,
++                                              unsigned long arg3,
++                                              struct arm_smccc_res *res)
++{
++        arm_smccc_smc(function_id, arg0, arg1, arg2, arg3, 0, 0, 0, res);
++}
++
+ static inline unsigned long rsi_request_version(unsigned long req,
+ 						unsigned long *out_lower,
+ 						unsigned long *out_higher)
+diff --git a/arch/arm64/include/uapi/asm/kvm.h b/arch/arm64/include/uapi/asm/kvm.h
+index 8aff914f8d57..d1c644c23e64 100644
+--- a/arch/arm64/include/uapi/asm/kvm.h
++++ b/arch/arm64/include/uapi/asm/kvm.h
+@@ -426,6 +426,15 @@ enum {
+ #define KVM_CAP_ARM_RME_POPULATE_REALM		3
+ #define KVM_CAP_ARM_RME_ACTIVATE_REALM		4
+ #define KVM_CAP_ARM_RME_CREATE_APT              5
++#define KVM_CAP_ARM_RME_PREALLOC_RTT      	6
++
++struct kvm_rme_prealloc_rtt {
++	__u64 ipa_start;     /* inclusive */
++	__u64 size;          /* bytes > 0 */
++	__u32 target_level;  /* 1..3; 3 = L3 (4KB) tables */
++	__u32 flags;         /* must be 0 for now */
++};
++
+ 
+ #define KVM_CAP_ARM_RME_MEASUREMENT_ALGO_SHA256		0
+ #define KVM_CAP_ARM_RME_MEASUREMENT_ALGO_SHA512		1
+diff --git a/arch/arm64/kvm/rme.c b/arch/arm64/kvm/rme.c
+index 1529277d8f41..029de78ff17b 100644
+--- a/arch/arm64/kvm/rme.c
++++ b/arch/arm64/kvm/rme.c
+@@ -1,8 +1,3 @@
+-// SPDX-License-Identifier: GPL-2.0
+-/*
+- * Copyright (C) 2023 ARM Ltd.
+- */
+-
+ #include <linux/kvm_host.h>
+ #include <linux/hugetlb.h>
+ 
+@@ -14,6 +9,10 @@
+ #include <asm/kvm_pgtable.h>
+ 
+ static unsigned long rmm_feat_reg0;
++static int kvm_realm_enable_cap_prealloc(struct kvm *kvm,
++					 struct kvm_enable_cap *cap);
++/* forward decl: used by the cap handler below */
++int kvm_realm_prealloc_rtt_range(struct kvm *kvm, u64 ipa, u64 size, u32 target_level);
+ 
+ static bool rme_supports(unsigned long feature)
+ {
+@@ -443,26 +442,27 @@ static int realm_create_apt(struct kvm *kvm)
+ 	void *apt = NULL;
+ 	phys_addr_t apt_phys, rd_phys;
+ 	struct realm *realm = &kvm->arch.realm;
++
+ 	apt = (void *)__get_free_page(GFP_KERNEL);
+-        if (!apt)
+-             return -ENOMEM;
+-
+-        apt_phys = virt_to_phys(apt);
+-        realm->apt = apt;
+-        if (rmi_granule_delegate(apt_phys)) {
+-                r = -ENXIO;
+-                goto out;
+-        }
++	if (!apt)
++		return -ENOMEM;
++
++	apt_phys = virt_to_phys(apt);
++	realm->apt = apt;
++	if (rmi_granule_delegate(apt_phys)) {
++		r = -ENXIO;
++		goto out;
++	}
+ 	rd_phys = virt_to_phys(realm->rd);
+ 
+-        if (rmi_apt_create(rd_phys, apt_phys, 0)) {
+-                r = -ENXIO;
+-                goto out;
+-        }
++	if (rmi_apt_create(rd_phys, apt_phys)) {
++		r = -ENXIO;
++		goto out;
++	}
+ 	return 0;
+ out:
+-        free_page((unsigned long)apt);
+-        return r;
++	free_page((unsigned long)apt);
++	return r;
+ }
+ 
+ static int realm_rtt_destroy(struct realm *realm, unsigned long addr,
+@@ -1314,14 +1314,8 @@ static int kvm_create_realm(struct kvm *kvm)
+ 
+ static int kvm_create_apt(struct kvm *kvm)
+ {
+-        struct realm *realm = &kvm->arch.realm;
+-        int ret;
+-        ret = realm_create_apt(kvm);
+-        if (ret) {
+-                return ret;
+-        }
+-
+-        return 0;
++	int ret = realm_create_apt(kvm);
++	return ret;
+ }
+ 
+ static int config_realm_hash_algo(struct realm *realm,
+@@ -1369,6 +1363,26 @@ static int kvm_rme_config_realm(struct kvm *kvm, struct kvm_enable_cap *cap)
+ 	return r;
+ }
+ 
++static int kvm_realm_enable_cap_prealloc(struct kvm *kvm,
++					 struct kvm_enable_cap *cap)
++{
++	struct kvm_rme_prealloc_rtt req;
++
++	if (!cap->args[1])
++		return -EINVAL;
++
++	if (copy_from_user(&req, (void __user *)(uintptr_t)cap->args[1], sizeof(req)))
++		return -EFAULT;
++
++	if (req.flags)
++		return -EINVAL;
++
++	pr_info("[RME-RTT] ENABLE_CAP PREALLOC: ipa=%#llx size=%#llx level=%u\n",
++		req.ipa_start, req.size, req.target_level);
++
++	return kvm_realm_prealloc_rtt_range(kvm, req.ipa_start, req.size, req.target_level);
++}
++
+ int kvm_realm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap)
+ {
+ 	int r = 0;
+@@ -1384,8 +1398,8 @@ int kvm_realm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap)
+ 		r = kvm_create_realm(kvm);
+ 		break;
+ 	case KVM_CAP_ARM_RME_CREATE_APT:
+-                r = kvm_create_apt(kvm);
+-                break;
++		r = kvm_create_apt(kvm);
++		break;
+ 	case KVM_CAP_ARM_RME_INIT_IPA_REALM: {
+ 		struct kvm_cap_arm_rme_init_ipa_args args;
+ 		void __user *argp = u64_to_user_ptr(cap->args[1]);
+@@ -1410,6 +1424,9 @@ int kvm_realm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap)
+ 		r = kvm_populate_realm(kvm, &args);
+ 		break;
+ 	}
++	case KVM_CAP_ARM_RME_PREALLOC_RTT:
++		return kvm_realm_enable_cap_prealloc(kvm, cap);
++
+ 	case KVM_CAP_ARM_RME_ACTIVATE_REALM:
+ 		r = kvm_activate_realm(kvm);
+ 		break;
+@@ -1421,6 +1438,60 @@ int kvm_realm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap)
+ 	return r;
+ }
+ 
++/* -------- Explicit RTT preallocation for an IPA range (down to target_level) -------- */
++
++static int prebuild_rtts(struct realm *realm, u64 start, u64 end, int target_level)
++{
++	int root = get_start_level(realm);
++	int lvl;
++
++	if (target_level < root || target_level > 3)
++		return -EINVAL;
++
++	for (lvl = root + 1; lvl <= target_level; lvl++) {
++		u64 step = rme_rtt_level_mapsize(lvl - 1);   /* parent size! */
++		u64 aligned_start = ALIGN_DOWN(start, step);
++		u64 aligned_end   = ALIGN(end, step);
++
++		for (u64 ipa = aligned_start; ipa < aligned_end; ipa += step) {
++			phys_addr_t rtt = alloc_delegated_page(realm, NULL, GFP_KERNEL);
++			int rc;
++
++			if (!rtt || rtt == PHYS_ADDR_MAX)
++				return -ENOMEM;
++
++			rc = realm_rtt_create(realm, ipa, lvl, rtt);
++			if (rc) {
++				/* If the table at this level already exists, that's fine. */
++				if (RMI_RETURN_STATUS(rc) == RMI_ERROR_RTT &&
++				    RMI_RETURN_INDEX(rc) == lvl) {
++					free_delegated_page(realm, rtt);
++					continue;
++				}
++				free_delegated_page(realm, rtt);
++				return -EFAULT;
++			}
++		}
++	}
++	return 0;
++}
++
++int kvm_realm_prealloc_rtt_range(struct kvm *kvm, u64 ipa, u64 size, u32 target_level)
++{
++	struct realm *realm = &kvm->arch.realm;
++	u64 start = ipa, end = ipa + size;
++
++	if (!size || end <= start)
++		return -EINVAL;
++
++	pr_info("[RME-RTT] prealloc request: ipa=%#llx size=%#llx level=%u\n",
++		ipa, size, target_level);
++
++	return prebuild_rtts(realm, start, end, (int)target_level);
++}
++
++/* ----------------------------------------------------------------------------------- */
++
+ void kvm_destroy_realm(struct kvm *kvm)
+ {
+ 	struct realm *realm = &kvm->arch.realm;
+-- 
+2.34.1
+

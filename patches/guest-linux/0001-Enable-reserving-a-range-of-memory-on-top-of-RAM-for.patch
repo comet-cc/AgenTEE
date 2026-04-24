@@ -1,0 +1,497 @@
+From a70d9ffb53a7b9326e8b412cc8f512b33ac78765 Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Thu, 25 Sep 2025 17:20:00 +0100
+Subject: [PATCH 1/2] Enable reserving a range of memory on top of RAM for
+ confidential shared memory. The user must manually enter
+ cca_reserve=top,<size> to the commnad line arguments
+
+---
+ arch/arm64/include/asm/cca_reserve_mem.h |   5 +
+ arch/arm64/kvm/rme.c                     |  43 +++
+ arch/arm64/mm/Makefile                   |   1 +
+ arch/arm64/mm/cca_reserve_mem.c          | 374 +++++++++++++++++++++++
+ arch/arm64/mm/init.c                     |   4 +-
+ 5 files changed, 426 insertions(+), 1 deletion(-)
+ create mode 100644 arch/arm64/include/asm/cca_reserve_mem.h
+ create mode 100644 arch/arm64/mm/cca_reserve_mem.c
+
+diff --git a/arch/arm64/include/asm/cca_reserve_mem.h b/arch/arm64/include/asm/cca_reserve_mem.h
+new file mode 100644
+index 000000000000..b1725418e948
+--- /dev/null
++++ b/arch/arm64/include/asm/cca_reserve_mem.h
+@@ -0,0 +1,5 @@
++#ifndef __ASM_ARM64_CCA_RESERVE_H
++#define __ASM_ARM64_CCA_RESERVE_H
++void __init cca_reserve_apply(void);
++void __init cca_force_reserve_fixed(phys_addr_t start, phys_addr_t size);
++#endif
+diff --git a/arch/arm64/kvm/rme.c b/arch/arm64/kvm/rme.c
+index d8e0a447e0cc..64401b2c5b4f 100644
+--- a/arch/arm64/kvm/rme.c
++++ b/arch/arm64/kvm/rme.c
+@@ -437,6 +437,49 @@ static int realm_create_rd(struct kvm *kvm)
+ 	return r;
+ }
+ 
++static int realm_create_apt(struct kvm *kvm, struct apt_params *apt_params_value)
++{
++	int r;
++	void *apt = NULL;
++	phys_addr_t apt_phys, rd_phys, apt_param_phys;
++	struct realm *realm = &kvm->arch.realm;
++	struct apt_params *apt_params = (struct apt_params *)get_zeroed_page(GFP_KERNEL);
++	apt = (void *)__get_free_page(GFP_KERNEL);
++	if (!apt)
++		return -ENOMEM;
++
++	apt_phys = virt_to_phys(apt);
++	realm->apt = apt;
++	if (rmi_granule_delegate(apt_phys)) {
++		r = -ENXIO;
++		goto out;
++	}
++	rd_phys = virt_to_phys(realm->rd);
++
++
++	//value to apt
++	apt_params->csdata_ipa_begin = apt_params_value->csdata_ipa_begin;
++	apt_params->csdata_ipa_end = apt_params_value->csdata_ipa_end;
++
++	apt_params->master_memory.ipa_start = apt_params_value->master_memory.ipa_start;
++	apt_params->master_memory.map_size = apt_params_value->master_memory.map_size;
++	apt_params->master_memory.enable = apt_params_value->master_memory.enable;
++
++	apt_params->slave_memory.ipa_start = apt_params_value->slave_memory.ipa_start;
++	apt_params->slave_memory.map_size = apt_params_value->slave_memory.map_size;
++	apt_params->slave_memory.enable = apt_params_value->slave_memory.enable;
++
++	apt_param_phys = virt_to_phys(apt_params);
++	if (rmi_apt_create(rd_phys, apt_phys, apt_param_phys)) {
++		r = -ENXIO;
++		goto out;
++	}
++	return 0;
++out:
++	free_page((unsigned long)apt);
++	return r;
++}
++
+ static int realm_rtt_destroy(struct realm *realm, unsigned long addr,
+ 			     int level, phys_addr_t *rtt_granule,
+ 			     unsigned long *next_addr)
+diff --git a/arch/arm64/mm/Makefile b/arch/arm64/mm/Makefile
+index 2fc8c6dd0407..3f11666f94e7 100644
+--- a/arch/arm64/mm/Makefile
++++ b/arch/arm64/mm/Makefile
+@@ -15,3 +15,4 @@ KASAN_SANITIZE_physaddr.o	+= n
+ 
+ obj-$(CONFIG_KASAN)		+= kasan_init.o
+ KASAN_SANITIZE_kasan_init.o	:= n
++obj-y				+= cca_reserve_mem.o
+diff --git a/arch/arm64/mm/cca_reserve_mem.c b/arch/arm64/mm/cca_reserve_mem.c
+new file mode 100644
+index 000000000000..51360461b8f1
+--- /dev/null
++++ b/arch/arm64/mm/cca_reserve_mem.c
+@@ -0,0 +1,374 @@
++// SPDX-License-Identifier: GPL-2.0
++// Command-line driven confidential RAM reservations for arm64.
++//
++// Usage (kernel cmdline):
++//   cca_reserve=<start>,<size>[,nomap]
++//   cca_reserve=top,<size>[,nomap]
++// Multiple ranges can be given either by repeating the param
++// or separating with ';' inside one param.
++//
++// Examples:
++//   cca_reserve=0x95e00000,180M,nomap
++//   cca_reserve=top,64M
++//   cca_reserve=0x90000000,32M;top,128M,nomap
++//
++// Notes:
++// - "nomap" removes the span from the arm64 linear map (like DT "no-map").
++// - Reservations are applied in arm64_memblock_init(), not at parse time.
++
++#include <linux/init.h>
++#include <linux/kernel.h>
++#include <linux/memblock.h>
++#include <linux/printk.h>
++#include <linux/string.h>
++#include <linux/sizes.h>
++#include <linux/types.h>
++#include <asm/cca_reserve_mem.h>
++#include <linux/string.h>   /* skip_spaces(), str_has_prefix() */
++#include <linux/ctype.h>    /* isspace() */
++
++#include <asm/pgtable.h>    /* PMD_SIZE */
++#define CCA_MAX_RANGES 8
++
++struct cca_range {
++	phys_addr_t start;   /* valid if !top */
++	phys_addr_t size;    /* bytes */
++	bool nomap;
++	bool top;            /* carve from top of DRAM */
++	bool used;
++};
++
++static int cca_add_range(struct cca_range *r);            /* defined below */
++static int __init parse_one(const char *s);               /* defined below */
++static int __init cca_reserve_param(char *str);           /* defined below */
++static void __init reserve_fixed(phys_addr_t, phys_addr_t, bool);
++static void __init reserve_from_top(phys_addr_t, bool);
++
++
++// Optional: runtime debug flag via cmdline "cca_reserve.debug=1"
++static bool cca_dbg;
++static int __init cca_reserve_dbg_param(char *str)
++{
++	cca_dbg = (str && *str == '1');
++	return 0;
++}
++early_param("cca_reserve.debug", cca_reserve_dbg_param);
++
++#define cca_dbg_pr(fmt, ...) \
++	do { if (cca_dbg) pr_info("cca_reserve: " fmt, ##__VA_ARGS__); } while (0)
++
++// --- keep your existing code ---
++
++// make the ranges throw-away after boot:
++static struct cca_range cca_ranges[CCA_MAX_RANGES] __initdata;
++
++// slightly chattier add_range
++static int cca_add_range(struct cca_range *r)
++{
++	int i;
++	for (i = 0; i < CCA_MAX_RANGES; i++) {
++		if (!cca_ranges[i].used) {
++			cca_ranges[i] = *r;
++			cca_ranges[i].used = true;
++			pr_info("cca_reserve: parsed %s,%pa,%pa%s\n",
++				r->top ? "top" : "fixed",
++				r->top ? &(phys_addr_t){ 0 } : &r->start,
++				&r->size,
++				r->nomap ? ",nomap" : "");
++			return 0;
++		}
++	}
++	pr_warn("cca_reserve: too many ranges (max %d)\n", CCA_MAX_RANGES);
++	return -ENOMEM;
++}
++
++static int __init parse_one(const char *s)
++{
++	struct cca_range r = { };
++	const char *p = s;
++	char *end;
++
++	/* top,<size>  OR  <start>,<size> */
++	if (str_has_prefix(p, "top") && p[3] == ',') {
++		r.top = true;
++		p += 4; /* past "top," */
++	} else {
++		r.start = memparse(p, &end);
++		if (end == p || *end != ',')
++			return -EINVAL;
++		p = end + 1;
++	}
++
++	p = skip_spaces(p);
++	r.size = memparse(p, &end);
++	if (end == p)
++		return -EINVAL;
++	p = end;
++
++	/* optional: comma-separated flags (currently only 'nomap') */
++	p = skip_spaces(p);
++	if (*p) {
++		bool seen_nomap = false;
++
++		for (;;) {
++			const char *tok;
++			size_t len;
++
++			if (*p != ',')          /* anything but a comma is junk */
++				return -EINVAL;
++
++			p++;                    /* consume ',' */
++			p = skip_spaces(p);
++			if (!*p)                /* trailing comma -> reject */
++				return -EINVAL;
++
++			/* capture token up to next comma or end */
++			tok = p;
++			while (*p && *p != ',')
++				p++;
++			len = p - tok;
++
++			/* trim trailing spaces in token */
++			while (len && isspace(tok[len - 1]))
++				len--;
++
++			/* exact match: "nomap" */
++			if (len == 5 && !memcmp(tok, "nomap", 5)) {
++				if (seen_nomap)       /* duplicate flag */
++					return -EINVAL;
++				r.nomap = true;
++				seen_nomap = true;
++			} else {
++				/* unknown flag => reject to surface typos */
++				return -EINVAL;
++			}
++
++			/* spaces before either ',' or end are fine */
++			p = skip_spaces(p);
++			if (!*p)
++				break;              /* clean end; done with flags */
++			/* else loop expects another ',' */
++		}
++	}
++
++	if (!r.size)
++		return -EINVAL;
++
++	return cca_add_range(&r);
++}
++
++static int __init cca_reserve_param(char *str)
++{
++	// str may contain multiple ranges separated by ';'
++	while (str && *str) {
++		char *next = strchr(str, ';');
++		if (next)
++			*next = '\0';
++
++		if (parse_one(str))
++			pr_err("cca_reserve: bad segment '%s'\n", str);
++		else
++			cca_dbg_pr("accepted segment '%s'\n", str);
++
++		if (next)
++			str = next + 1;
++		else
++			break;
++	}
++	return 0;
++}
++early_param("cca_reserve", cca_reserve_param);
++
++/* Align & reserve a fixed span */
++static void __init reserve_fixed(phys_addr_t start, phys_addr_t size, bool nomap)
++{
++	phys_addr_t end = ALIGN(start + size, PMD_SIZE);
++	start = ALIGN_DOWN(start, PMD_SIZE);
++	size  = end - start;
++
++	{
++		u64 lo = memblock_start_of_DRAM();
++		u64 hi = memblock_end_of_DRAM();
++		/* refuse if not wholly inside System RAM (including multi-bank) */
++		if (!memblock_is_region_memory(start, size) ||
++		    start < lo || (start + size) > hi) {
++			pr_err("cca_reserve: REFUSE [%pa..%pa) not fully in System RAM (DRAM[%pa..%pa))\n",
++			       &start, &(phys_addr_t){ start + size }, &lo, &hi);
++			return;
++		}
++		/* also avoid colliding existing reservations */
++		if (memblock_is_region_reserved(start, size)) {
++			pr_err("cca_reserve: REFUSE [%pa..%pa) overlaps reserved memory\n",
++			       &start, &(phys_addr_t){ start + size });
++			return;
++		}
++	}
++
++	if (memblock_reserve(start, size))
++		pr_err("cca_reserve: reserve [%pa..%pa) FAILED\n",
++		       &start, &(phys_addr_t){ start + size });
++	else
++		pr_info("cca_reserve: reserved [%pa..%pa) (%llu KiB)%s\n",
++			&start, &(phys_addr_t){ start + size },
++			(unsigned long long)(size >> 10), nomap ? " +nomap" : "");
++
++	if (nomap) {
++		if (memblock_mark_nomap(start, size))
++			pr_warn("cca_reserve: mark_nomap [%pa..%pa) failed\n",
++				&start, &(phys_addr_t){ start + size });
++		else
++			cca_dbg_pr("mark_nomap [%pa..%pa)\n",
++				   &start, &(phys_addr_t){ start + size });
++	}
++}
++
++static u64 cca_top_cursor __initdata;
++
++static void __init cca_dump_context_once(void)
++{
++	static bool once;
++	if (once) return;
++	once = true;
++
++	{
++		u64 lo = memblock_start_of_DRAM();
++		u64 hi = memblock_end_of_DRAM();
++#ifdef CONFIG_BLK_DEV_INITRD
++		extern phys_addr_t phys_initrd_start;
++		extern unsigned long phys_initrd_size;
++		pr_info("cca_reserve: DRAM [%pa..%pa) initrd=%pa+%lu\n",
++			&lo, &hi, &phys_initrd_start, phys_initrd_size);
++#else
++		pr_info("cca_reserve: DRAM [%pa..%pa) initrd=none\n", &lo, &hi);
++#endif
++	}
++}
++
++
++static u64 __init highest_usable_top(u64 gran)
++{
++	u64 lo = memblock_start_of_DRAM();
++	u64 hi = memblock_end_of_DRAM();          /* exclusive */
++
++	if (hi <= lo)
++		return lo;
++
++	hi = ALIGN_DOWN(hi, gran);
++
++	/* Walk down until we find an aligned, free slot at 'gran' */
++	while (hi > lo) {
++		u64 start = hi - gran;
++		if (memblock_is_region_memory(start, gran) &&
++		    !memblock_is_region_reserved(start, gran)) {
++			cca_dbg_pr("highest_usable_top: picked 0x%llx (gran=%llu)\n",
++				   (unsigned long long)hi,
++				   (unsigned long long)gran);
++			return hi;
++		}
++		/* show why we skipped */
++		cca_dbg_pr("highest_usable_top: skip  [%pa..%pa)%s%s\n",
++			   &start, &(phys_addr_t){ start + gran },
++			   memblock_is_region_memory(start, gran) ? "" : " !SystemRAM",
++			   memblock_is_region_reserved(start, gran) ? " reserved" : "");
++		hi -= gran;
++	}
++	return lo;
++}
++
++static void __init cca_top_cursor_init(void)
++{
++	cca_dump_context_once();
++	cca_top_cursor = highest_usable_top(PMD_SIZE);
++	pr_info("cca_reserve: top-cursor init = %pa (gran=%lu)\n",
++		&cca_top_cursor, (unsigned long)PMD_SIZE);
++}
++
++static void __init reserve_from_top(phys_addr_t size, bool nomap)
++{
++	u64 lo = memblock_start_of_DRAM();
++
++	if (!cca_top_cursor)
++		cca_top_cursor_init();
++
++	size = ALIGN(size, PMD_SIZE);
++	cca_dbg_pr("top: request size=%pa (aligned=%pa)\n",
++		   &(phys_addr_t){ size }, &(phys_addr_t){ size });
++
++	while (size) {
++		u64 chunk = min_t(u64, size, PMD_SIZE);
++		u64 next  = cca_top_cursor ? cca_top_cursor : highest_usable_top(PMD_SIZE);
++
++		if (next <= lo || chunk > (next - lo)) {
++			pr_err("cca_reserve: top carve %llu MiB does not fit (cursor=%pa lo=%pa)\n",
++			       (unsigned long long)(size >> 20),
++			       &next, &lo);
++			return;
++		}
++
++		/* candidate region */
++		u64 start = next - chunk;
++
++		if (!memblock_is_region_memory(start, chunk) ||
++		    memblock_is_region_reserved(start, chunk)) {
++			cca_dbg_pr("top: step over [%pa..%pa) (hole/reserved)\n",
++				   &start, &(phys_addr_t){ start + chunk });
++			cca_top_cursor = ALIGN_DOWN(start, PMD_SIZE);
++			continue;
++		}
++
++		/* commit */
++		cca_top_cursor = start;
++		cca_dbg_pr("top: commit  [%pa..%pa)\n",
++			   &start, &(phys_addr_t){ start + chunk });
++		reserve_fixed(start, chunk, nomap);
++		size -= chunk;
++	}
++}
++
++/* Called from arm64_memblock_init() */
++void __init cca_reserve_apply(void)
++{
++	int i;
++
++	cca_dump_context_once();
++
++	for (i = 0; i < CCA_MAX_RANGES; i++) {
++		struct cca_range *r = &cca_ranges[i];
++		if (!r->used)
++			continue;
++
++		if (r->top) {
++			cca_dbg_pr("apply: top,%pa%s\n",
++				   &r->size, r->nomap ? ",nomap" : "");
++			reserve_from_top(r->size, r->nomap);
++		} else {
++			cca_dbg_pr("apply: %pa,%pa%s\n",
++				   &r->start, &r->size, r->nomap ? ",nomap" : "");
++			reserve_fixed(r->start, r->size, r->nomap);
++		}
++	}
++}
++
++// keep cca_force_reserve_fixed(), but align with PMD_SIZE and add sanity
++void __init cca_force_reserve_fixed(phys_addr_t start, phys_addr_t size)
++{
++	phys_addr_t end = ALIGN(start + size, PMD_SIZE);
++	start = ALIGN_DOWN(start, PMD_SIZE);
++	size  = end - start;
++
++	if (!memblock_is_region_memory(start, size) ||
++	    memblock_is_region_reserved(start, size)) {
++		pr_err("cca_force_reserve_fixed: REFUSE [%pa..%pa) (not free System RAM)\n",
++		       &start, &(phys_addr_t){ start + size });
++		return;
++	}
++
++	if (memblock_reserve(start, size))
++		pr_err("cca_force_reserve_fixed: reserve [%pa..%pa) failed\n",
++		       &start, &(phys_addr_t){ start + size });
++	else
++		pr_info("cca_force_reserve_fixed: reserved [%pa..%pa) (%llu KiB)\n",
++			&start, &(phys_addr_t){ start + size },
++			(unsigned long long)(size >> 10));
++	/* If needed later, enable nomap here similarly to reserve_fixed() */
++}
+\ No newline at end of file
+diff --git a/arch/arm64/mm/init.c b/arch/arm64/mm/init.c
+index d21f67d67cf5..e097d2fbe728 100644
+--- a/arch/arm64/mm/init.c
++++ b/arch/arm64/mm/init.c
+@@ -48,6 +48,7 @@
+ #include <asm/tlb.h>
+ #include <asm/alternative.h>
+ #include <asm/xen/swiotlb-xen.h>
++#include <asm/cca_reserve_mem.h>
+ 
+ /*
+  * We need to be able to catch inadvertent references to memstart_addr
+@@ -308,7 +309,8 @@ void __init arm64_memblock_init(void)
+ 		initrd_start = __phys_to_virt(phys_initrd_start);
+ 		initrd_end = initrd_start + phys_initrd_size;
+ 	}
+-
++	//cca_force_reserve_fixed(0xa5800000, 0x0b400000);
++	cca_reserve_apply(); 
+ 	early_init_fdt_scan_reserved_mem();
+ 
+ 	high_memory = __va(memblock_end_of_DRAM() - 1) + 1;
+-- 
+2.34.1
+

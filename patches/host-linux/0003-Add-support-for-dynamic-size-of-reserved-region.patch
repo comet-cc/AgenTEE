@@ -1,0 +1,148 @@
+From 0cef84e74e6f210c554553f9fb6cb585f321ef65 Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Fri, 22 Aug 2025 14:39:11 +0100
+Subject: [PATCH] Add support for dynamic size of reserved region
+
+---
+ arch/arm64/include/asm/apt.h      | 24 +++++++++++++++++++
+ arch/arm64/include/asm/rmi_cmds.h |  4 ++--
+ arch/arm64/kvm/rme.c              | 40 ++++++++++++++++++++++++-------
+ 3 files changed, 58 insertions(+), 10 deletions(-)
+ create mode 100644 arch/arm64/include/asm/apt.h
+
+diff --git a/arch/arm64/include/asm/apt.h b/arch/arm64/include/asm/apt.h
+new file mode 100644
+index 000000000000..0708b387c561
+--- /dev/null
++++ b/arch/arm64/include/asm/apt.h
+@@ -0,0 +1,24 @@
++struct master_mem {
++    uint8_t slave_ID;
++	unsigned long slave_rd_pa;
++    unsigned long ipa_start;
++	unsigned long map_size;
++	bool enable;
++};
++
++struct slave_mem {
++    uint8_t master_ID;
++	unsigned long master_rd_pa;
++    unsigned long ipa_start;
++	unsigned long map_size;
++	bool enable;
++};
++
++//csdata_ipa variables define the boundries in which the data is shared (combination of slave and master)
++
++struct apt_params {
++	unsigned long csdata_ipa_begin;
++	unsigned long csdata_ipa_end;
++	struct master_mem master_memory;
++	struct slave_mem slave_memory;
++};
+diff --git a/arch/arm64/include/asm/rmi_cmds.h b/arch/arm64/include/asm/rmi_cmds.h
+index 08a8b8192cf0..105342e207d4 100644
+--- a/arch/arm64/include/asm/rmi_cmds.h
++++ b/arch/arm64/include/asm/rmi_cmds.h
+@@ -507,11 +507,11 @@ static inline int rmi_rtt_unmap_unprotected(unsigned long rd,
+ 	return res.a0;
+ }
+ 
+-static inline int rmi_apt_create(unsigned long rd, unsigned long apt)
++static inline int rmi_apt_create(unsigned long rd, unsigned long apt, unsigned long apt_param)
+ {
+         struct arm_smccc_res res;
+ 
+-        arm_smccc_1_1_invoke(SMC_RMI_APT_CREATE, rd, apt, &res);
++        arm_smccc_1_1_invoke(SMC_RMI_APT_CREATE, rd, apt, apt_param, &res);
+ 
+         return res.a0;
+ }
+diff --git a/arch/arm64/kvm/rme.c b/arch/arm64/kvm/rme.c
+index 029de78ff17b..2f7297676877 100644
+--- a/arch/arm64/kvm/rme.c
++++ b/arch/arm64/kvm/rme.c
+@@ -5,6 +5,7 @@
+ #include <asm/kvm_mmu.h>
+ #include <asm/rmi_cmds.h>
+ #include <asm/virt.h>
++#include <asm/apt.h>
+ 
+ #include <asm/kvm_pgtable.h>
+ 
+@@ -436,13 +437,13 @@ static int realm_create_rd(struct kvm *kvm)
+ 	return r;
+ }
+ 
+-static int realm_create_apt(struct kvm *kvm)
++static int realm_create_apt(struct kvm *kvm, struct apt_params *apt_params_value)
+ {
+ 	int r;
+ 	void *apt = NULL;
+-	phys_addr_t apt_phys, rd_phys;
++	phys_addr_t apt_phys, rd_phys, apt_param_phys;
+ 	struct realm *realm = &kvm->arch.realm;
+-
++	struct apt_params *apt_params = (struct apt_params *)get_zeroed_page(GFP_KERNEL);
+ 	apt = (void *)__get_free_page(GFP_KERNEL);
+ 	if (!apt)
+ 		return -ENOMEM;
+@@ -455,7 +456,21 @@ static int realm_create_apt(struct kvm *kvm)
+ 	}
+ 	rd_phys = virt_to_phys(realm->rd);
+ 
+-	if (rmi_apt_create(rd_phys, apt_phys)) {
++
++	//value to apt
++	apt_params->csdata_ipa_begin = apt_params_value->csdata_ipa_begin;
++	apt_params->csdata_ipa_end = apt_params_value->csdata_ipa_end;
++
++	apt_params->master_memory.ipa_start = apt_params_value->master_memory.ipa_start;
++	apt_params->master_memory.map_size = apt_params_value->master_memory.map_size;
++	apt_params->master_memory.enable = apt_params_value->master_memory.enable;
++
++	apt_params->slave_memory.ipa_start = apt_params_value->slave_memory.ipa_start;
++	apt_params->slave_memory.map_size = apt_params_value->slave_memory.map_size;
++	apt_params->slave_memory.enable = apt_params_value->slave_memory.enable;
++
++	apt_param_phys = virt_to_phys(apt_params);
++	if (rmi_apt_create(rd_phys, apt_phys, apt_param_phys)) {
+ 		r = -ENXIO;
+ 		goto out;
+ 	}
+@@ -1312,9 +1327,9 @@ static int kvm_create_realm(struct kvm *kvm)
+ 	return 0;
+ }
+ 
+-static int kvm_create_apt(struct kvm *kvm)
++static int kvm_create_apt(struct kvm *kvm, struct apt_params *apt_params)
+ {
+-	int ret = realm_create_apt(kvm);
++	int ret = realm_create_apt(kvm, apt_params);
+ 	return ret;
+ }
+ 
+@@ -1397,9 +1412,18 @@ int kvm_realm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap)
+ 	case KVM_CAP_ARM_RME_CREATE_RD:
+ 		r = kvm_create_realm(kvm);
+ 		break;
+-	case KVM_CAP_ARM_RME_CREATE_APT:
+-		r = kvm_create_apt(kvm);
++	case KVM_CAP_ARM_RME_CREATE_APT: {
++		struct apt_params args;
++		void __user *argp = u64_to_user_ptr(cap->args[1]);
++
++		if (copy_from_user(&args, argp, sizeof(args))) {
++			r = -EFAULT;
++			break;
++		}
++	
++		r = kvm_create_apt(kvm, &args);
+ 		break;
++	}
+ 	case KVM_CAP_ARM_RME_INIT_IPA_REALM: {
+ 		struct kvm_cap_arm_rme_init_ipa_args args;
+ 		void __user *argp = u64_to_user_ptr(cap->args[1]);
+-- 
+2.34.1
+

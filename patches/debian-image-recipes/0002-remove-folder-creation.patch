@@ -1,0 +1,24 @@
+From b33af98ff7939ebbb441e1cdb1a6c9c8e4ec3afb Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Sat, 31 Jan 2026 12:05:01 +0000
+Subject: [PATCH] remove folder creation
+
+---
+ buildfs.sh | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/buildfs.sh b/buildfs.sh
+index 50c5942..10e8da7 100755
+--- a/buildfs.sh
++++ b/buildfs.sh
+@@ -3,7 +3,6 @@
+ DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+ set -x
+ cd $DIR
+-mkdir out
+ sudo debos --artifactdir=out -t architecture:arm64 ospack-debian.yaml
+ sudo debos --artifactdir=out -t architecture:arm64 -t platform:rock5b-rk3588 opencca-image-rockchip-rk3588.yaml
+ 
+-- 
+2.34.1
+

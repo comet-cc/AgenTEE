@@ -1,0 +1,53 @@
+From 5a6928ecb38d0f1a850ba85bb1698dcc0a6d00fc Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Mon, 2 Feb 2026 13:59:54 +0000
+Subject: [PATCH] temporary remove collabora
+
+---
+ ospack-debian.yaml | 22 +++++++++++-----------
+ 1 file changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/ospack-debian.yaml b/ospack-debian.yaml
+index 9cdbbdb..a18927e 100644
+--- a/ospack-debian.yaml
++++ b/ospack-debian.yaml
+@@ -24,14 +24,14 @@ actions:
+       - apt-transport-https
+       - ca-certificates
+ 
+-  - action: overlay
+-    decription: Add collabora rk3588 hardware enablement repositories
+-    source: overlays/repositories
++#  - action: overlay
++ #   decription: Add collabora rk3588 hardware enablement repositories
++  #  source: overlays/repositories
+ 
+-  - action: apt
+-    description: Install collabora keyring package
+-    package:
+-      - collabora-archive-keyring
++  #- action: apt
++   # description: Install collabora keyring package
++    #package:
++     # - collabora-archive-keyring
+ 
+   - action: apt
+     description: Install systemd
+@@ -133,10 +133,10 @@ actions:
+     packages:
+       - alsa-utils
+ 
+-{{- if eq $gfx "true" }}
+-  - action: recipe
+-    recipe: gfx-packages.yaml
+-{{- end }}
++#{{- if eq $gfx "true" }}
++ # - action: recipe
++  #  recipe: gfx-packages.yaml
++#{{- end }}
+ 
+   - action: overlay
+     description: Configure on-demand SSH host key regeneration
+-- 
+2.34.1
+

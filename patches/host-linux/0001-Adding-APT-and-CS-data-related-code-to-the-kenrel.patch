@@ -1,0 +1,303 @@
+From be0c44f30db30e8c4c0f5d836d4e55b6438f00e4 Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Mon, 28 Jul 2025 18:02:03 +0100
+Subject: [PATCH 1/2] Adding APT and CS data related code to the kenrel
+
+---
+ arch/arm64/include/asm/kvm_rme.h  |  1 +
+ arch/arm64/include/asm/rmi_cmds.h | 45 +++++++++++++++++++
+ arch/arm64/include/asm/rmi_smc.h  |  5 +++
+ arch/arm64/include/uapi/asm/kvm.h |  2 +
+ arch/arm64/kvm/rme.c              | 74 +++++++++++++++++++++++++++----
+ rk3588_fragment.config            |  4 +-
+ 6 files changed, 121 insertions(+), 10 deletions(-)
+
+diff --git a/arch/arm64/include/asm/kvm_rme.h b/arch/arm64/include/asm/kvm_rme.h
+index cd42c19ca21d..fec9cbce0e07 100644
+--- a/arch/arm64/include/asm/kvm_rme.h
++++ b/arch/arm64/include/asm/kvm_rme.h
+@@ -69,6 +69,7 @@ struct realm {
+ 	unsigned long num_aux;
+ 	unsigned int vmid;
+ 	unsigned int ia_bits;
++	void *apt;
+ };
+ 
+ /**
+diff --git a/arch/arm64/include/asm/rmi_cmds.h b/arch/arm64/include/asm/rmi_cmds.h
+index 3ed32809a608..e15ac9b97dc4 100644
+--- a/arch/arm64/include/asm/rmi_cmds.h
++++ b/arch/arm64/include/asm/rmi_cmds.h
+@@ -507,4 +507,49 @@ static inline int rmi_rtt_unmap_unprotected(unsigned long rd,
+ 	return res.a0;
+ }
+ 
++static inline int rmi_apt_create(unsigned long rd, unsigned long apt,
++                                 unsigned long params_ptr)
++{
++        struct arm_smccc_res res;
++
++        arm_smccc_1_1_invoke(SMC_RMI_APT_CREATE, rd, apt, params_ptr, &res);
++
++        return res.a0;
++}
++
++static inline int rmi_apt_destroy(unsigned long rd, unsigned long apt)
++{
++        struct arm_smccc_res res;
++
++        arm_smccc_1_1_invoke(SMC_RMI_APT_DESTROY, rd, apt, &res);
++
++        return res.a0;
++}
++
++static inline int rmi_csdata_create(unsigned long rd, unsigned long data,
++                                  unsigned long ipa, unsigned long src,
++                                  unsigned long flags)
++{
++        struct arm_smccc_res res;
++
++        arm_smccc_1_1_invoke(SMC_RMI_CSDATA_CREATE, rd, data, ipa, src,
++                             flags, &res);
++
++        return res.a0;
++}
++
++static inline int rmi_csdata_destroy(unsigned long rd, unsigned long ipa,
++                                   unsigned long *data_out,
++                                   unsigned long *top_out)
++{
++        struct arm_smccc_res res;
++
++        arm_smccc_1_1_invoke(SMC_RMI_CSDATA_DESTROY, rd, ipa, &res);
++
++        *data_out = res.a1;
++        *top_out = res.a2;
++
++        return res.a0;
++}
++
+ #endif
+diff --git a/arch/arm64/include/asm/rmi_smc.h b/arch/arm64/include/asm/rmi_smc.h
+index 0fde2e06d275..fa0ea325f496 100644
+--- a/arch/arm64/include/asm/rmi_smc.h
++++ b/arch/arm64/include/asm/rmi_smc.h
+@@ -41,6 +41,10 @@
+ #define SMC_RMI_RTT_SET_RIPAS		SMC_RxI_CALL(0x0169)
+ #define SMC_RMI_RTT_UNMAP_UNPROTECTED	SMC_RxI_CALL(0x0162)
+ #define SMC_RMI_VERSION			SMC_RxI_CALL(0x0150)
++#define SMC_RMI_APT_CREATE              SMC_RxI_CALL(0x016a)
++#define SMC_RMI_APT_DESTROY             SMC_RxI_CALL(0x016b)
++#define SMC_RMI_CSDATA_CREATE           SMC_RxI_CALL(0x016c)
++#define SMC_RMI_CSDATA_DESTROY          SMC_RxI_CALL(0x016d)
+ 
+ #define RMI_ABI_MAJOR_VERSION	1
+ #define RMI_ABI_MINOR_VERSION	0
+@@ -70,6 +74,7 @@ enum rmi_ripas {
+ 
+ #define RMI_NO_MEASURE_CONTENT	0
+ #define RMI_MEASURE_CONTENT	1
++#define RMI_NEW_RTT	        2
+ 
+ #define RMI_FEATURE_REGISTER_0_S2SZ		GENMASK(7, 0)
+ #define RMI_FEATURE_REGISTER_0_LPA2		BIT(8)
+diff --git a/arch/arm64/include/uapi/asm/kvm.h b/arch/arm64/include/uapi/asm/kvm.h
+index 080331008b79..8aff914f8d57 100644
+--- a/arch/arm64/include/uapi/asm/kvm.h
++++ b/arch/arm64/include/uapi/asm/kvm.h
+@@ -425,6 +425,7 @@ enum {
+ #define KVM_CAP_ARM_RME_INIT_IPA_REALM		2
+ #define KVM_CAP_ARM_RME_POPULATE_REALM		3
+ #define KVM_CAP_ARM_RME_ACTIVATE_REALM		4
++#define KVM_CAP_ARM_RME_CREATE_APT              5
+ 
+ #define KVM_CAP_ARM_RME_MEASUREMENT_ALGO_SHA256		0
+ #define KVM_CAP_ARM_RME_MEASUREMENT_ALGO_SHA512		1
+@@ -454,6 +455,7 @@ struct kvm_cap_arm_rme_config_item {
+ };
+ 
+ #define KVM_ARM_RME_POPULATE_FLAGS_MEASURE	BIT(0)
++#define KVM_ARM_RME_POPULATE_FLAGS_CSDATA      BIT(1)
+ struct kvm_cap_arm_rme_populate_realm_args {
+ 	__u64 populate_ipa_base;
+ 	__u64 populate_ipa_size;
+diff --git a/arch/arm64/kvm/rme.c b/arch/arm64/kvm/rme.c
+index d8e0a447e0cc..1529277d8f41 100644
+--- a/arch/arm64/kvm/rme.c
++++ b/arch/arm64/kvm/rme.c
+@@ -437,6 +437,34 @@ static int realm_create_rd(struct kvm *kvm)
+ 	return r;
+ }
+ 
++static int realm_create_apt(struct kvm *kvm)
++{
++	int r;
++	void *apt = NULL;
++	phys_addr_t apt_phys, rd_phys;
++	struct realm *realm = &kvm->arch.realm;
++	apt = (void *)__get_free_page(GFP_KERNEL);
++        if (!apt)
++             return -ENOMEM;
++
++        apt_phys = virt_to_phys(apt);
++        realm->apt = apt;
++        if (rmi_granule_delegate(apt_phys)) {
++                r = -ENXIO;
++                goto out;
++        }
++	rd_phys = virt_to_phys(realm->rd);
++
++        if (rmi_apt_create(rd_phys, apt_phys, 0)) {
++                r = -ENXIO;
++                goto out;
++        }
++	return 0;
++out:
++        free_page((unsigned long)apt);
++        return r;
++}
++
+ static int realm_rtt_destroy(struct realm *realm, unsigned long addr,
+ 			     int level, phys_addr_t *rtt_granule,
+ 			     unsigned long *next_addr)
+@@ -678,7 +706,7 @@ static int realm_create_protected_data_page(struct realm *realm,
+ 					    unsigned long ipa,
+ 					    struct page *dst_page,
+ 					    struct page *src_page,
+-					    unsigned long flags)
++					    unsigned long flags, unsigned long csdata)
+ {
+ 	phys_addr_t dst_phys, src_phys;
+ 	int ret;
+@@ -689,8 +717,10 @@ static int realm_create_protected_data_page(struct realm *realm,
+ 	if (rmi_granule_delegate(dst_phys))
+ 		return -ENXIO;
+ 
+-	ret = rmi_data_create(virt_to_phys(realm->rd), dst_phys, ipa, src_phys,
+-			      flags);
++	if (csdata == 0)
++		ret = rmi_data_create(virt_to_phys(realm->rd), dst_phys, ipa, src_phys, flags);
++	else
++		ret = rmi_csdata_create(virt_to_phys(realm->rd), dst_phys, ipa, src_phys, flags);
+ 
+ 	if (RMI_RETURN_STATUS(ret) == RMI_ERROR_RTT) {
+ 		/* Create missing RTTs and retry */
+@@ -700,9 +730,13 @@ static int realm_create_protected_data_page(struct realm *realm,
+ 					      RME_RTT_MAX_LEVEL, NULL);
+ 		if (ret)
+ 			goto err;
++		if (csdata == 0)
++			ret = rmi_data_create(virt_to_phys(realm->rd), dst_phys, ipa,
++					      src_phys, flags);
++		else
++			ret = rmi_csdata_create(virt_to_phys(realm->rd), dst_phys, ipa,
++                                              src_phys, flags);
+ 
+-		ret = rmi_data_create(virt_to_phys(realm->rd), dst_phys, ipa,
+-				      src_phys, flags);
+ 	}
+ 
+ 	if (!ret)
+@@ -917,12 +951,15 @@ static int populate_par_region(struct kvm *kvm,
+ 	phys_addr_t ipa;
+ 	int ret = 0;
+ 	unsigned long data_flags = 0;
++	unsigned long csdata = 0;
+ 
+ 	base_gfn = gpa_to_gfn(ipa_base);
+ 	end_gfn = gpa_to_gfn(ipa_end);
+ 
+ 	if (flags & KVM_ARM_RME_POPULATE_FLAGS_MEASURE)
+ 		data_flags = RMI_MEASURE_CONTENT;
++	if (flags & KVM_ARM_RME_POPULATE_FLAGS_CSDATA)
++		csdata = 1;
+ 
+ 	idx = srcu_read_lock(&kvm->srcu);
+ 	memslot = gfn_to_memslot(kvm, base_gfn);
+@@ -1016,7 +1053,7 @@ static int populate_par_region(struct kvm *kvm,
+ 
+ 			ret = realm_create_protected_data_page(realm, page_ipa,
+ 							       pfn_to_page(priv_pfn),
+-							       page, data_flags);
++							       page, data_flags, csdata);
+ 		}
+ 
+ 		kvm_release_pfn_clean(pfn);
+@@ -1037,6 +1074,7 @@ static int populate_par_region(struct kvm *kvm,
+ 	return ret;
+ }
+ 
++
+ static int kvm_populate_realm(struct kvm *kvm,
+ 			      struct kvm_cap_arm_rme_populate_realm_args *args)
+ {
+@@ -1049,8 +1087,8 @@ static int kvm_populate_realm(struct kvm *kvm,
+ 	    !IS_ALIGNED(args->populate_ipa_size, PAGE_SIZE))
+ 		return -EINVAL;
+ 
+-	if (args->flags & ~RMI_MEASURE_CONTENT)
+-		return -EINVAL;
++	if (args->flags & ~(RMI_MEASURE_CONTENT | RMI_NEW_RTT))
++ 		return -EINVAL;
+ 
+ 	ipa_base = args->populate_ipa_base;
+ 	ipa_end = ipa_base + args->populate_ipa_size;
+@@ -1274,6 +1312,18 @@ static int kvm_create_realm(struct kvm *kvm)
+ 	return 0;
+ }
+ 
++static int kvm_create_apt(struct kvm *kvm)
++{
++        struct realm *realm = &kvm->arch.realm;
++        int ret;
++        ret = realm_create_apt(kvm);
++        if (ret) {
++                return ret;
++        }
++
++        return 0;
++}
++
+ static int config_realm_hash_algo(struct realm *realm,
+ 				  struct kvm_cap_arm_rme_config_item *cfg)
+ {
+@@ -1333,6 +1383,9 @@ int kvm_realm_enable_cap(struct kvm *kvm, struct kvm_enable_cap *cap)
+ 	case KVM_CAP_ARM_RME_CREATE_RD:
+ 		r = kvm_create_realm(kvm);
+ 		break;
++	case KVM_CAP_ARM_RME_CREATE_APT:
++                r = kvm_create_apt(kvm);
++                break;
+ 	case KVM_CAP_ARM_RME_INIT_IPA_REALM: {
+ 		struct kvm_cap_arm_rme_init_ipa_args args;
+ 		void __user *argp = u64_to_user_ptr(cap->args[1]);
+@@ -1387,6 +1440,11 @@ void kvm_destroy_realm(struct kvm *kvm)
+ 	if (realm->rd) {
+ 		phys_addr_t rd_phys = virt_to_phys(realm->rd);
+ 
++		phys_addr_t apt_phys = virt_to_phys(realm->apt);
++		if (WARN_ON(rmi_apt_destroy(rd_phys, apt_phys)))
++			return;
++		if (WARN_ON(rmi_granule_undelegate(apt_phys)))
++                        return;
+ 		if (WARN_ON(rmi_realm_destroy(rd_phys)))
+ 			return;
+ 		if (WARN_ON(rmi_granule_undelegate(rd_phys)))
+diff --git a/rk3588_fragment.config b/rk3588_fragment.config
+index 0bd51ac197c8..be0bd6818306 100644
+--- a/rk3588_fragment.config
++++ b/rk3588_fragment.config
+@@ -29,8 +29,8 @@ CONFIG_CPU_IDLE=n
+ CONFIG_ACPI=y
+ CONFIG_DEBUG_INFO_DWARF4=y
+ 
+-CONFIG_OPENCCA_RESERVE_ASIDS=y
+-CONFIG_OPENCCA_HW_DEBUG=y
++CONFIG_OPENCCA_RESERVE_ASIDS=n
++CONFIG_OPENCCA_HW_DEBUG=n
+ 
+ 
+ # perf support
+-- 
+2.34.1
+

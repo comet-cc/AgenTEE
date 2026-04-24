@@ -1,0 +1,28 @@
+From 2edaf9a8aeebe60cca3aeddb6e653d9645071aae Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Sat, 31 Jan 2026 12:37:28 +0000
+Subject: [PATCH] update overlays
+
+---
+ opencca-image-rockchip-rk3588.yaml | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/opencca-image-rockchip-rk3588.yaml b/opencca-image-rockchip-rk3588.yaml
+index 25f1b7f..a1bd900 100644
+--- a/opencca-image-rockchip-rk3588.yaml
++++ b/opencca-image-rockchip-rk3588.yaml
+@@ -86,6 +86,11 @@ actions:
+     source: overlays/opencca/tty/etc/systemd/system/serial-getty@ttyS2.service.d/
+     destination: /etc/systemd/system/serial-getty@ttyS2.service.d/
+ 
++  - action: overlay
++    description: Overlay CAEC scripts
++    source: overlays/CAEC/
++    destination: /home/user/
++
+   - action: apt
+     description: install opencca packages
+     packages:
+-- 
+2.34.1
+
