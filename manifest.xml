@@ -5,7 +5,7 @@
   <remote name="github" fetch="ssh://git@github.com/"/>
  
   <default remote="comet" revision="main" />
-  <project name="AgenTEE" path="AgenTEE" revision="main" /> 
+  <project name="AgenTEE" path="manifest" revision="main" /> 
   <project name="cca_agents" path="cca_agents" revision="496b1eee2b38d750896d71f31076b801f3d818ba" /> 
   <project name="RMM-CAEC" path="tf-rmm" revision="cf0be957e6367f6da4ca28bdf86bd7c7d84ff97f" />
   <project name="debos-fs" path="debos-fs" revision="43820354add2a186c27317c4c6d58d50ad54f27f" />

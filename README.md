@@ -9,7 +9,7 @@ Building components and reproducing the evaluation results of CAEC.
 
 ## Initializing repositories
 ```
-repo init -u https://github.com/comet-cc/CAEC.git -m manifest.xml
+repo init -u https://github.com/comet-cc/AgenTEE.git -m manifest.xml
 repo sync
 ```
 The above commands initialize repositories required to build and reproduce CAEC evaluation results. We used [OpenCCA](https://github.com/opencca) as the evaluation platform. The manifest clones OpenCCA repositories to build components and flash the board (Radxa Rock 5B), along with CAEC components provided in the following repositories:
