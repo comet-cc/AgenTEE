@@ -5,9 +5,8 @@ OVERLAY="$DIR/debos-fs/overlay"
 rsync -av --delete $DIR/External_modules/*.ko $OVERLAY/.
 rsync -av --delete $DIR/External_modules/user-space/out/* $OVERLAY/.
 rsync -av --delete $DIR/manifest/overlays/guestfs/* $OVERLAY/.
-rsync -av --delete $DIR/SecGPT $OVERLAY/.
 #rsync -av --delete /home/netsys1/Multi-Realm-LLM-source/Multi-Realm-LLM/suplementary-binaries/out/* $OVERLAY/.
-cp $DIR/manifest/agenttee-requirements-install.sh $DIR/debos-fs/
+cp $DIR/manifest/agenttee-arm64-install.sh $DIR/debos-fs/
 
 cd $DIR/debos-fs
 sudo ./build.sh --imgsize 2000MB --format ext4 \

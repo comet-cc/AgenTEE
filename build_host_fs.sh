@@ -1,6 +1,6 @@
 #!/bin/bash
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )
-OVERLAY="$DIR/debian-image-recipes/overlays/CAEC"
+OVERLAY="$DIR/debian-image-recipes/overlays/AgenTEE"
 
 cd $DIR/debian-image-recipes
 rsync -av --delete $DIR/manifest/overlays/hostfs/* $OVERLAY/.

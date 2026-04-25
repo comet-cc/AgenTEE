@@ -22,6 +22,6 @@ mkdir -p $DIR/../snapshot
 mkdir -p $DIR/../tmp
 mkdir -p $DIR/../debos-fs/overlay
 mkdir -p $DIR/../debian-image-recipes/out
-mkdir -p $DIR/../debian-image-recipes/overlays/CAEC
-mkdir -p $DIR/../debian-image-recipes/overlays/CAEC/VM_image
-mkdir -p $DIR/../debian-image-recipes/overlays/CAEC/shared_with_VM
+mkdir -p $DIR/../debian-image-recipes/overlays/AgenTEE
+mkdir -p $DIR/../debian-image-recipes/overlays/AgenTEE/VM_image
+mkdir -p $DIR/../debian-image-recipes/overlays/AgenTEE/shared_with_VM

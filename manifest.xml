@@ -7,8 +7,8 @@
   <default remote="comet" revision="main" />
   <project name="AgenTEE" path="manifest" revision="main" /> 
   <project name="RMM-CAEC" path="tf-rmm" revision="cf0be957e6367f6da4ca28bdf86bd7c7d84ff97f" />
-  <project name="debos-fs" path="debos-fs" revision="43820354add2a186c27317c4c6d58d50ad54f27f" />
-  <project name="External-Modules-CAEC" path="External_modules" revision="c199064667e30fea460612622afcc535bc2f5cfd" />
+  <project name="debos-fs" path="debos-fs" revision="4e3cd9944b4327c4de41f7db7d822fea7185c343" />
+   <project name="External-Modules-CAEC" path="External_modules" revision="0f82741348db33141778e0c15e2653fcbbd83683" />
   <project name="kvmtool-cca-CAEC" path="kvmtool" revision="6d41b06fae0752e09f37dca248b6dafbe142311e" />
   <project name="linux" remote="opencca" path="linux" revision="opencca/rk3588-v5+v7" />
   <project name="linux" remote="opencca" path="linux-guest" revision="opencca/rk3588-v5+v7" />
@@ -19,8 +19,8 @@
   <project name="ggml-org/llama.cpp" remote="github" path="llamacpp" revision="e02b597be3702174e7b47b44cd03e1da1553284b" />
   <project name="debian-image-recipes" remote="opencca" path="debian-image-recipes" 
   revision="06cf2e55d7b7aaad8da107abcbcf5463dd7b0474" />
-  <project name="arm-trusted-firmware" remote="opencca" path="trusted-firmware-a" revision="opencca/systex25" />
-  <project name="u-boot" path="u-boot" remote="opencca" revision="opencca/systex25" />
+  <project name="CAEC-paper/arm-trusted-firmware" path="trusted-firmware-a" remote="github" revision="CAEC" />
+  <project name="CAEC-paper/u-boot" path="u-boot" remote="github" revision="2580869f3410e0b2154800541b9dc375ac01321c" />
   <project name="rkbin" path="rkbin" remote="opencca" revision="b0c100f1a260d807df450019774993c761beb79d" />
   <project name="opencca/opencca-assets" path="opencca-assets" remote="github" 
   revision="f75c95d15e485d8f147ff8fd4cc2f2513ed60131" />
