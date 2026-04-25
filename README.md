@@ -29,10 +29,10 @@ The above commands initialize repositories required to build and reproduce AgenT
 ```
 ./opencca-build/scripts/build_all.sh
 ```
-4) Download LLM (Optional): Run the following script to download GPT2 (GGUF) from huggingface. You need to provide your huggingface token for authorization.
+4) Download a local LLM: Run the following script to download GPT2-medium (GGUF) from huggingface. You need to provide your huggingface token for authorization.
 ```
 # Run outside of the container, you ma need to install some python packages
-./manifest/download_model.sh -m openai-community/gpt2 -t [HF_Token]
+./manifest/download_model.sh -m openai-community/gpt2-medium -t [HF_Token]
 ```
 You can skip this step if you do not want to run data sharing benchmark.
 

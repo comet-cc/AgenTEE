@@ -1,7 +1,7 @@
 #!/bin/bash
 set -x
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-TARGET_DIR="$DIR/../debian-image-recipes/overlays/CAEC/shared_with_VM"
+TARGET_DIR="$DIR/../debian-image-recipes/overlays/AgenTEE/shared_with_VM"
 while getopts "t:m:" opt; do
 	case $opt in
 	m)

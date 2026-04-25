@@ -11,6 +11,9 @@ git am ../manifest/patches/guest-linux/*.patch
 cd $DIR/../debian-image-recipes
 git am ../manifest/patches/debian-image-recipes/*.patch
 
+
+cd $DIR/../opencca-build
+git am ../manifest/patches/opencca-build/*.patch
 # Update submodules
 cd $DIR/../tf-rmm
 git submodule update --init --recursive

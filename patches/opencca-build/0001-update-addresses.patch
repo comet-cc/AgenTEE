@@ -1,0 +1,25 @@
+From cfea2d03389a42fe2d3b959e5711ae0762d62bea Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Sat, 25 Apr 2026 13:30:13 +0100
+Subject: [PATCH] update addresses
+
+---
+ scripts/build_all.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/build_all.sh b/scripts/build_all.sh
+index 268c3e5..7e56756 100755
+--- a/scripts/build_all.sh
++++ b/scripts/build_all.sh
+@@ -99,7 +99,7 @@ function build_modules {
+ 
+ function transfer_binaries {
+ #rsync -av $SCRIPT_DIR/../../snapshot/* $SCRIPT_DIR/../../debian-image-recipes/prebuilt/u-boot-rock5b-rk3588/.
+-rsync -av $SCRIPT_DIR/../../snapshot/lkvm $SCRIPT_DIR/../../debian-image-recipes/overlays/CAEC/.
++rsync -av $SCRIPT_DIR/../../snapshot/lkvm $SCRIPT_DIR/../../debian-image-recipes/overlays/AgenTEE/.
+ rsync -av $SCRIPT_DIR/../../snapshot/* $SCRIPT_DIR/../../opencca-flash/flash/snapshot/.
+ }
+ 
+-- 
+2.34.1
+
