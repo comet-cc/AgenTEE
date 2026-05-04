@@ -1,0 +1,32 @@
+From 695c23fa16fedbe961f49b34261b3016a9952e90 Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Sat, 25 Apr 2026 16:59:04 +0100
+Subject: [PATCH] remove CAEC overlay from build
+
+---
+ opencca-image-rockchip-rk3588.yaml | 7 +------
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/opencca-image-rockchip-rk3588.yaml b/opencca-image-rockchip-rk3588.yaml
+index 2602753..fa05205 100644
+--- a/opencca-image-rockchip-rk3588.yaml
++++ b/opencca-image-rockchip-rk3588.yaml
+@@ -86,14 +86,9 @@ actions:
+     source: overlays/opencca/tty/etc/systemd/system/serial-getty@ttyS2.service.d/
+     destination: /etc/systemd/system/serial-getty@ttyS2.service.d/
+ 
+-  - action: overlay
+-    description: Overlay CAEC scripts
+-    source: overlays/CAEC/
+-    destination: /home/user/
+-
+   - action: overlay
+     description: Overlay agenTEE scripts
+-    source: overlays/agenTEE/
++    source: overlays/AgenTEE/
+     destination: /home/user/
+ 
+   - action: run
+-- 
+2.34.1
+

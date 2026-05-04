@@ -12,7 +12,7 @@ Building components and reproducing the evaluation results of AgenTEE.
 repo init -u https://github.com/comet-cc/AgenTEE.git -m manifest.xml
 repo sync
 ```
-The above commands initialize repositories required to build and reproduce AgenTEE evaluation results. AgenTEE is built on top of existing code introuduced in [CAEC](https://github.com/comet-cc/CAEC). AgenTEE also uses [OpenCCA](https://github.com/opencca) as the evaluation platform. 
+The above commands initialize repositories required to build and reproduce AgenTEE evaluation results. AgenTEE is built on top of existing software stack introuduced in [CAEC](https://github.com/comet-cc/CAEC). AgenTEE also uses [OpenCCA](https://github.com/opencca) as the evaluation platform. 
 
 ## Building components
 1) Run the prebuild script (update submodules, apply patches, etc):
@@ -34,13 +34,12 @@ The above commands initialize repositories required to build and reproduce AgenT
 # Run outside of the container, you ma need to install some python packages
 ./manifest/download_model.sh -m openai-community/gpt2-medium -t [HF_Token]
 ```
-You can skip this step if you do not want to run data sharing benchmark.
-
 5) Build the guest and host file systems with:
 ```
 ./manifest/build_guest_fs.sh
 ./manifest/build_host_fs.sh
 ```
+`Warning`: Assign a strong password for your user in the file system under the file `./debian-image-recipes/scripts/setup-user.sh` 
 
 6) SD card preparation: Attach the SD card to the x86 build system. Find the device name under `/dev` using `lsblk` and run:
 ```
@@ -61,42 +60,60 @@ The board is now ready. You can follow the guide [here](https://docs.radxa.com/e
 
 ## Reproducing benchmarks 
 
-### Communication benchmark
+### VM Experiment
 1) Boot two realm VMs in seperate screen sessions:
 
 create a new screen session with `screen -S master`
 ```
-./master.sh
+# use model_gpt2_medium_experiment_disk_NW.sh for NW VM
+./model_gpt2_medium_experiment_disk.sh
 ```
 exit from the current session with `Ctrl+a d` and create a new session with `screen -S slave`
 ```
-./slave.sh
+# use ./agent_gpt2_medium_experiment_disk_NW.sh for NW VM
+./agent_gpt2_medium_experiment_disk.sh
 ```
 2) Run the follwing scripts within the sessions:
 
-exit from the current session with `Ctrl+a d` and log with `screen -r master`, then run:
+Exit from the current session with `Ctrl+a d` and log with `screen -r master`, then run:
 ```
 ./master_caec.sh
+./disk_mount_copy_model.sh
 ```
-exit from the current session with `Ctrl+a d` and log with `screen -r slave`, then run: 
+Exit from the current session with `Ctrl+a d` and log with `screen -r slave`, then run: 
 ```
 ./slave_caec.sh
 ```
-Now the shared memory is ready to use between two realms. To run each mode of data sharing experiment, you need to run this code on the slave side.
+3) Now the shared memory is ready to use between two realms. To run the inference engine, you need to run this code on the master side.
 ```
-./shmem_test_[experiment] receiver [device]
+./model_chatbot.sh -device /dev/shmem0_confidential
+# or use ./model_itinerary.sh instead
 ```
 Then, exit from the current session with `Ctrl+a d` and log with `screen -r master`, then run: 
 ```
-./shmem_test_[experiment] sender [device]
+./agent_chatbot.sh --device /dev/shmem0_confidential
+# or use ./agent_itinerary.sh instead
 ```
-[device] choices: 
 
-`/dev/shmem0_confidential`: Confidential shared memory (CSM) between realms
+### Experiment with NW processes
+To reproduce experiments with regular processes, first install necessary packages and activate the environmnet:
+```
+./agentee-setup-runtime.sh
+source /opt/agentee/bin/activate
+```
 
-`/dev/shmem0_pci`: Normal world shared memory between realms
+ You must then create a new screen session with `screen -S master` and run the inference engine with:
+```
+./model_chatbot.sh 
+# or use ./model_itinerary.sh instead
+```
+Exit from the current session with `Ctrl+a d` and create a new session with `screen -S slave`, then run the agent
+```
+./agent_chatbot.sh 
+# or use ./agent_itinerary.sh instead
+```
 
-
+## Paper
 **AgenTEE: Confidential LLM Agent Execution on Edge Devices**,
 Sina Abdollahi, Mohammad M Maheri, Javad Forough, Amir Al Sadi, Josh Millar, David Kotz, Marios Kogias, Hamed Haddadi
 **Conference**

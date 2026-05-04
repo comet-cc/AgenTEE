@@ -1,7 +1,8 @@
 #!/bin/bash
 set -x
 DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-TARGET_DIR="$DIR/../debian-image-recipes/overlays/AgenTEE/shared_with_VM"
+TARGET_DIR_host="$DIR/../debian-image-recipes/overlays/AgenTEE/shared_with_VM"
+
 while getopts "t:m:" opt; do
 	case $opt in
 	m)
@@ -24,5 +25,5 @@ if [ -z "${HF_TOKEN}" ]; then
 fi
 
 python3 $DIR/convert_gguf.py $model $HF_TOKEN --outtype q8_0 --llama_cpp_dir $DIR/../llamacpp
-cp $DIR/../tmp/* $TARGET_DIR/.
+cp $DIR/../tmp/* $TARGET_DIR_host/.
 

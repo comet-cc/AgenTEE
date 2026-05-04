@@ -1,0 +1,51 @@
+From ef62df56daff826d2ae95c6ffe9cad56f490817e Mon Sep 17 00:00:00 2001
+From: SinaAb7 <sinaabdollahip@gmail.com>
+Date: Thu, 9 Apr 2026 16:33:57 +0100
+Subject: [PATCH] change user log setting
+
+---
+ disk_create.sh        | 6 +++++-
+ scripts/setup-user.sh | 2 +-
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/disk_create.sh b/disk_create.sh
+index bf6da43..3ed18c6 100755
+--- a/disk_create.sh
++++ b/disk_create.sh
+@@ -2,7 +2,7 @@
+ 
+ DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+ set -x
+-
++NEW_DTB="/boot/rk3588-rock-5b-plus.dtb"
+ echo "enter the right disk an input argument e.g., ./disk_create.sh sdc"
+ 
+ if [ -z "$1" ]; then
+@@ -14,7 +14,11 @@ sudo bmaptool copy $DIR/out/opencca-image-rockchip-rock5b-rk3588.img.gz /dev/$1
+ 
+ mkdir -p /mntc
+ sudo mount /dev/$1"3" /mntc
++
+ sudo cp $DIR/../snapshot/Image /mntc/boot/.
+ sudo cp /mntc/boot/extlinux/extlinux.conf /mntc/boot/extlinux/extlinux.conf.bak
+ sudo sed -i -E 's/^([[:space:]]*linux[[:space:]]+)\/boot[^[:space:]]*/\1\/boot\/Image/' /mntc/boot/extlinux/extlinux.conf
++
++sudo cp $DIR/../snapshot/rk3588-rock-5b-plus.dtb /mntc/boot/.
++sudo sed -Ei "s|^[[:space:]]*fdtdir[[:space:]]+.*$|    fdt ${NEW_DTB}|" /mntc/boot/extlinux/extlinux.conf
+ sudo umount /mntc
+diff --git a/scripts/setup-user.sh b/scripts/setup-user.sh
+index 77616d9..ce848fd 100755
+--- a/scripts/setup-user.sh
++++ b/scripts/setup-user.sh
+@@ -9,6 +9,6 @@ adduser user video
+ adduser user render
+ adduser user input
+ adduser user audio
+-echo "user:user" | chpasswd
++# Fill the following line with your login password
++# echo "user:---------" | chpasswd
+ 
+ echo '%sudo ALL=(ALL:ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/99_nopasswd_sudo
+-- 
+2.34.1
+
