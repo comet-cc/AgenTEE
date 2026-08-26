@@ -116,7 +116,10 @@ Exit from the current session with `Ctrl+a d` and create a new session with `scr
 ## Paper
 **AgenTEE: Confidential LLM Agent Execution on Edge Devices**,
 Sina Abdollahi, Mohammad M Maheri, Javad Forough, Amir Al Sadi, Josh Millar, David Kotz, Marios Kogias, Hamed Haddadi
+
 **Conference**
+EuroMLSys '26: Proceedings of the Sixth European Workshop on Machine Learning and Systems
+
 
 The paper can be found [here](https://arxiv.org/pdf/2604.18231).
 
