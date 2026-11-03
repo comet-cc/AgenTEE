@@ -127,10 +127,11 @@ The paper can be found [here](https://arxiv.org/pdf/2604.18231).
 ## Citation
 If you use the code/data in your research, please cite our work as follows:
 ```
-@article{abdollahi2026agentee,
-  title={{AgenTEE: Confidential LLM Agent Execution on Edge Devices}},
-  author={Abdollahi, Sina and Maheri, Mohammad M and Forough, Javad and Sadi, Amir Al and Millar, Josh and Kotz, David and Kogias, Marios and Haddadi, Hamed},
-  journal={arXiv preprint arXiv:2604.18231},
+@inproceedings{abdollahi2026agentee,
+  title={AgenTEE: Confidential LLM Agent Execution on Edge Devices},
+  author={Abdollahi, Sina and Maheri, Mohammad M and Forough, Javad and Al Sadi, Amir and Millar, Josh and Kotz, David and Kogias, Marios and Haddadi, Hamed},
+  booktitle={Proceedings of the Sixth European Workshop on Machine Learning and Systems},
+  pages={473--480},
   year={2026}
 }
 ```
